@@ -26,10 +26,10 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
     last_epoch_average_train_loss       = 10000.0       
     last_epoch_average_val_loss         = 10000.0
 
-    writer_text                         = SummaryWriter('Tensorboard/vgg16_training_text/')
-    writer_avg_train_loss               = SummaryWriter('Tensorboard/vgg16_training_avg_train_loss_per_epoch/')
-    writer_avg_valid_loss               = SummaryWriter('Tensorboard/vgg16_training_avg_valid_loss_per_epoch/')
-    writer_hparams                      = SummaryWriter('Tensorboard/vgg16_training_hparams/')
+    writer_text                         = SummaryWriter('Tensorboard/vgg16/vgg16_training_text/')
+    writer_avg_train_loss               = SummaryWriter('Tensorboard/vgg16/vgg16_training_avg_train_loss_per_epoch/')
+    writer_avg_valid_loss               = SummaryWriter('Tensorboard/vgg16/vgg16_training_avg_valid_loss_per_epoch/')
+    writer_hparams                      = SummaryWriter('Tensorboard/vgg16/vgg16_training_hparams/')
 
     train_dataset                       = TSDataset(mode = 'Train')
     train_loader                        = DataLoader(train_dataset, batch_size = 128, shuffle = True)
@@ -41,10 +41,10 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
     optimizer_state_dict                = None
 
     if load_pretrained_weights == True:
-        checkpoint_path                 = '../../vgg16_bn-6c64b313.pth'
+        checkpoint_path                 = 'ModelParams/vgg16/vgg16_bn-6c64b313.pth'
         model_state_dict                = loadModelParams(checkpoint_path)
     else:
-        checkpoint_path                 = ''
+        checkpoint_path                 = 'ModelParams/vgg16/'
         checkpoint                      = torch.load(checkpoint_path)
 
         model_state_dict                = checkpoint['state_dict']
@@ -61,7 +61,7 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
 
     model = vgg16_bn(pretrained = False, num_classes = 55)    
 
-    criterion                           = nn.CrossEntropyLoss()
+    criterion                           = nn.BCEWithLogitsLoss()
     optimizer                           = optim.Adam(model.parameters(), lr = base_lr_rate, weight_decay = weight_decay, amsgrad = True)
 
     model.load_state_dict(state_dict = model_state_dict, strict = False)
@@ -90,7 +90,7 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                
         epoch_since                 = time.time()
 
-        writer_epoch                = SummaryWriter('Tensorboard/vgg16_training_avg_loss_per_iteration_epoch_{}/'.format(current_epoch + 1))
+        writer_epoch                = SummaryWriter('Tensorboard/vgg16/vgg16_training_avg_loss_per_iteration_epoch_{}/'.format(current_epoch + 1))
 
         current_train_iter          = 0
         current_val_iter            = 0
@@ -124,7 +124,7 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                     optimizer.zero_grad()
             
                     loss = criterion(outs, annotations)
-
+                    print('Train loss: {}'.format(loss.item()))
                     running_train_loss += loss.item()
                     current_average_train_loss = running_train_loss / current_train_iter
 
@@ -156,7 +156,7 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                         outs = model(images)
                         
                         val_loss = criterion(outs, annotations)
-
+                        print('Val loss: {}'.format(val_loss.item()))
                         running_val_loss += val_loss.item()
                         current_average_val_loss = running_val_loss / current_val_iter
 
@@ -234,4 +234,4 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                         global_step = (current_epoch + 1), walltime = None)
 
 if __name__ == "__main__":
-    train(batch_size = 128, epochs = 150, load_pretrained_weights = True)
+    train(batch_size = 64, epochs = 150, load_pretrained_weights = True)
