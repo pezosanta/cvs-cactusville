@@ -4,8 +4,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-TrainFULLPath                   = '../trafficSignsHW/trainFULL/'
-TestFULLPath                    = '../trafficSignsHW/testFULL/'
+TrainFULLPath                   = 'trafficSignsDataset/trainFULL/'
+TestFULLPath                    = 'trafficSignsDataset/testFULL/'
 JPG                             = '*.jpg'
 
 # Train image folder paths
