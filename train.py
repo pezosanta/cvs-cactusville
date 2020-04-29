@@ -8,61 +8,91 @@ import time
 import warnings
 from dataset import TSDataset
 from vgg import vgg16_bn, loadModelParams
-
+from utils import cat_list as cat_list_lowercase
+from utils import add_lists_elementwise, calculate_batch_accuracy, calculate_epoch_accuracy
 
 
 def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
 
-    base_lr_rate                        = 0.00025
-    weight_decay                        = 0.000016
+    num_train_total_images                  = 104500
+    num_val_total_images                    = 5500
+    num_train_category_images               = 1900
+    num_val_category_images                 = 100
 
-    starting_epoch                      = 0
-    starting_train_iter                 = 0
-    starting_val_iter                   = 0
-    current_status                      = 'Train'
+    cat_list                                = [category.upper() for category in cat_list_lowercase]
 
-    best_epoch_average_train_loss       = 10000.0   # Updated only if best_epoch_average_val_loss is updated as well
-    best_epoch_average_val_loss         = 10000.0
-    last_epoch_average_train_loss       = 10000.0       
-    last_epoch_average_val_loss         = 10000.0
+    base_lr_rate                            = 0.00025
+    weight_decay                            = 0.000016
 
-    writer_text                         = SummaryWriter('Tensorboard/vgg16/vgg16_training_text/')
-    writer_avg_train_loss               = SummaryWriter('Tensorboard/vgg16/vgg16_training_avg_train_loss_per_epoch/')
-    writer_avg_valid_loss               = SummaryWriter('Tensorboard/vgg16/vgg16_training_avg_valid_loss_per_epoch/')
-    writer_hparams                      = SummaryWriter('Tensorboard/vgg16/vgg16_training_hparams/')
+    starting_epoch                          = 0
+    starting_train_iter                     = 0
+    starting_val_iter                       = 0
+    current_status                          = 'Train'
 
-    train_dataset                       = TSDataset(mode = 'Train')
-    train_loader                        = DataLoader(train_dataset, batch_size = 128, shuffle = True)
+    best_epoch_average_train_loss           = 10000.0   # Updated only if best_epoch_average_val_loss is updated as well
+    best_epoch_average_val_loss             = 10000.0
+    last_epoch_average_train_loss           = 10000.0       
+    last_epoch_average_val_loss             = 10000.0
 
-    val_dataset                         = TSDataset(mode = 'Val')
-    val_loader                          = DataLoader(val_dataset, batch_size = 128, shuffle = True)
+    best_epoch_train_accuracy               = 0.0
+    best_epoch_val_accuracy                 = 0.0
+    last_epoch_train_accuracy               = 0.0
+    last_epoch_val_accuracy                 = 0.0
+
+    best_epoch_train_classwise_accuracy     = []
+    best_epoch_val_classwise_accuracy       = []
+    last_epoch_train_classwise_accuracy     = []
+    last_epoch_val_classwise_accuracy       = []
+
+    writer_text                             = SummaryWriter('Tensorboard/vgg16/vgg16_training_text/')
+    writer_avg_train_loss                   = SummaryWriter('Tensorboard/vgg16/vgg16_training_avg_train_loss_per_epoch/')
+    writer_train_accuracy                   = SummaryWriter('Tensorboard/vgg16/vgg16_training_train_accuracy_per_epoch/')
+    writer_train_classwise_accuracy         = SummaryWriter('Tensorboard/vgg16/vgg16_training_train_classwise_accuracy_per_epoch/')
+    writer_avg_valid_loss                   = SummaryWriter('Tensorboard/vgg16/vgg16_training_avg_valid_loss_per_epoch/')
+    writer_val_accuracy                     = SummaryWriter('Tensorboard/vgg16/vgg16_training_valid_accuracy_per_epoch/')
+    writer_val_classwise_accuracy           = SummaryWriter('Tensorboard/vgg16/vgg16_training_valid_classwise_accuracy_per_epoch/')
+    writer_hparams                          = SummaryWriter('Tensorboard/vgg16/vgg16_training_hparams/')
+
+    train_dataset                           = TSDataset(mode = 'Train')
+    train_loader                            = DataLoader(train_dataset, batch_size = batch_size, shuffle = True)
+
+    val_dataset                             = TSDataset(mode = 'Val')
+    val_loader                              = DataLoader(val_dataset, batch_size = batch_size, shuffle = True)
     
-    model_state_dict                    = None
-    optimizer_state_dict                = None
+    model_state_dict                        = None
+    optimizer_state_dict                    = None
 
     if load_pretrained_weights == True:
-        checkpoint_path                 = 'ModelParams/vgg16/vgg16_bn-6c64b313.pth'
-        model_state_dict                = loadModelParams(checkpoint_path)
+        checkpoint_path                     = 'ModelParams/vgg16/vgg16_bn-6c64b313.pth'
+        model_state_dict                    = loadModelParams(checkpoint_path)
     else:
-        checkpoint_path                 = 'ModelParams/vgg16/'
-        checkpoint                      = torch.load(checkpoint_path)
+        checkpoint_path                     = 'ModelParams/vgg16/'
+        checkpoint                          = torch.load(checkpoint_path)
 
-        model_state_dict                = checkpoint['state_dict']
-        optimizer_state_dict            = checkpoint['optimizer_state_dict']
-        starting_epoch                  = checkpoint['epoch'] + 1                   # Wherever we need to start the training from (based on Tensorboard!)
-        starting_train_iter             = 0#checkpoint['train_iter'] + 1
-        starting_val_iter               = 0#checkpoint['val_iter'] + 1
-        base_lr_rate                    = checkpoint['lr']
-        weight_decay                    = checkpoint['weight_decay']
-        best_epoch_average_train_loss   = checkpoint['best_train_loss']
-        best_epoch_average_val_loss     = checkpoint['best_val_loss']
-        last_epoch_average_train_loss   = checkpoint['last_train_loss']
-        last_epoch_average_val_loss     = checkpoint['last_val_loss']
+        model_state_dict                    = checkpoint['state_dict']
+        optimizer_state_dict                = checkpoint['optimizer_state_dict']
+        starting_epoch                      = checkpoint['epoch'] + 1                   # Wherever we need to start the training from (based on Tensorboard!)
+        starting_train_iter                 = 0#checkpoint['train_iter'] + 1
+        starting_val_iter                   = 0#checkpoint['val_iter'] + 1
+        base_lr_rate                        = checkpoint['lr']
+        weight_decay                        = checkpoint['weight_decay']
+        best_epoch_average_train_loss       = checkpoint['best_train_loss']
+        best_epoch_average_val_loss         = checkpoint['best_val_loss']
+        best_epoch_train_accuracy           = checkpoint['best_train_accuracy']
+        best_epoch_val_accuracy             = checkpoint['best_val_accuracy']
+        best_epoch_train_classwise_accuracy = checkpoint['best_train_classwise_accuracy']
+        best_epoch_val_classwise_accuracy   = checkpoint['best_val_classwise_accuracy']
+        last_epoch_average_train_loss       = checkpoint['last_train_loss']
+        last_epoch_average_val_loss         = checkpoint['last_val_loss']
+        last_epoch_train_accuracy           = checkpoint['last_train_accuracy']
+        last_epoch_val_accuracy             = checkpoint['last_val_accuracy']
+        last_epoch_train_classwise_accuracy = checkpoint['last_train_classwise_accuracy']
+        last_epoch_val_classwise_accuracy   = checkpoint['last_val_classwise_accuracy']
 
-    model = vgg16_bn(pretrained = False, num_classes = 55)    
+    model                                   = vgg16_bn(pretrained = False, num_classes = 55)    
 
-    criterion                           = nn.BCEWithLogitsLoss()
-    optimizer                           = optim.Adam(model.parameters(), lr = base_lr_rate, weight_decay = weight_decay, amsgrad = True)
+    criterion                               = nn.BCEWithLogitsLoss()
+    optimizer                               = optim.Adam(model.parameters(), lr = base_lr_rate, weight_decay = weight_decay, amsgrad = True)
 
     model.load_state_dict(state_dict = model_state_dict, strict = False)
     #optimizer.load_state_dict(optimizer_state_dict)
@@ -82,25 +112,35 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                                     + '[BEST/LAST] AVERAGE TRAINING LOSS: [{:5f} / {:5f}]  \n'.format(
                                             best_epoch_average_train_loss, last_epoch_average_train_loss)                                                 \
                                     + '[BEST/LAST] AVERAGE VALIDATION LOSS: [{:5f} / {:5f}]  \n'.format(
-                                            best_epoch_average_val_loss, last_epoch_average_val_loss)),                                                   \
+                                            best_epoch_average_val_loss, last_epoch_average_val_loss)                                                     \
+                                    + '[BEST/LAST] TRAINING ACCURACY: [{:5f} / {:5f}]  \n'.format(
+                                                best_epoch_train_accuracy, last_epoch_train_accuracy)                                                     \
+                                    + '[BEST/LAST] VALIDATION ACCURACY: [{:5f} / {:5f}]  \n'.format(
+                                            best_epoch_val_accuracy, last_epoch_val_accuracy)),                                                           \
                     global_step = starting_epoch, walltime = None) 
 
     for current_epoch in range(starting_epoch, epochs):
         writer_text.add_text(tag = 'VGG16/RunningLogs', text_string = 'EPOCH: {}/{}'.format((current_epoch + 1), epochs), global_step = (current_epoch + 1), walltime = None)
                
-        epoch_since                 = time.time()
+        epoch_since                             = time.time()
 
-        writer_epoch                = SummaryWriter('Tensorboard/vgg16/vgg16_training_avg_loss_per_iteration_epoch_{}/'.format(current_epoch + 1))
+        writer_epoch                            = SummaryWriter('Tensorboard/vgg16/vgg16_training_avg_loss_per_iteration_epoch_{}/'.format(current_epoch + 1))
 
-        current_train_iter          = 0
-        current_val_iter            = 0
+        current_train_iter                      = 0
+        current_val_iter                        = 0
         
-        running_train_loss          = 0.0
-        current_average_train_loss  = 0.0
-        running_val_loss            = 0.0
-        current_average_val_loss    = 0.0
+        running_train_loss                      = 0.0
+        current_average_train_loss              = 0.0
+        running_val_loss                        = 0.0
+        current_average_val_loss                = 0.0
 
-        is_saved                    = False
+        running_train_correct_preds             = 0
+        running_train_correct_classwise_preds   = [0] * 55
+
+        running_val_correct_preds               = 0
+        running_val_correct_classwise_preds     = [0] * 55
+
+        is_saved                        = False
 
         for phase in ['train', 'val']:
 
@@ -124,11 +164,16 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                     optimizer.zero_grad()
             
                     loss = criterion(outs, annotations)
-                    print('Train loss: {}'.format(loss.item()))
+
                     running_train_loss += loss.item()
                     current_average_train_loss = running_train_loss / current_train_iter
 
-                    #writer_epoch.add_scalar(tag = 'VGG16/TrainingIterationAverageLoss'.format(current_epoch + 1), scalar_value = current_average_train_loss, global_step = current_train_iter)
+                    batch_accuracy, batch_correct_preds, batch_classwise_correct_preds = calculate_batch_accuracy(outs, annotations, batch_size)
+                    running_train_correct_preds += batch_correct_preds
+                    running_train_correct_classwise_preds = add_lists_elementwise(running_train_correct_classwise_preds, batch_classwise_correct_preds)
+
+                    writer_epoch.add_scalar(tag = 'VGG16/TrainingIterationAverageLoss'.format(current_epoch + 1), scalar_value = current_average_train_loss, global_step = current_train_iter)
+                    writer_epoch.add_scalar(tag = 'VGG16/TrainingIterationAccuracy'.format(current_epoch + 1), scalar_value = batch_accuracy, global_step = current_train_iter)
                     
                     loss.backward(retain_graph = False)
             
@@ -136,7 +181,15 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                 
                 last_epoch_average_train_loss = current_average_train_loss
 
-                writer_avg_train_loss.add_scalar(tag = 'VGG16/Overfitting', scalar_value = last_epoch_average_train_loss, global_step = (current_epoch + 1))
+                last_epoch_train_accuracy, last_epoch_train_classwise_accuracy = calculate_epoch_accuracy(
+                    running_train_correct_preds, running_train_correct_classwise_preds, num_train_total_images, num_train_category_images)
+
+                writer_avg_train_loss.add_scalar(tag = 'VGG16/OverfittingLoss', scalar_value = last_epoch_average_train_loss, global_step = (current_epoch + 1))
+                writer_train_accuracy.add_scalar(tag = 'VGG16/OverfittingAccuracy', scalar_value = last_epoch_train_accuracy, global_step = (current_epoch + 1))
+                
+                writer_train_classwise_accuracy.add_scalars(main_tag = 'VGG16/TrainingCategoryAccuracy/', 
+                    tag_scalar_dict =  dict(zip(cat_list, last_epoch_train_classwise_accuracy )),
+                    global_step = (current_epoch + 1))
 
                 train_time_elapsed = time.time() - train_epoch_since
             
@@ -156,26 +209,45 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                         outs = model(images)
                         
                         val_loss = criterion(outs, annotations)
-                        print('Val loss: {}'.format(val_loss.item()))
+                       
                         running_val_loss += val_loss.item()
                         current_average_val_loss = running_val_loss / current_val_iter
 
-                        #writer_epoch.add_scalar(tag = 'VGG16/ValidationIterationAverageLoss'.format((current_epoch + 1)), scalar_value = current_average_val_loss, global_step = current_val_iter)
-                    
+                        batch_accuracy, batch_correct_preds, batch_classwise_correct_preds = calculate_batch_accuracy(outs, annotations, batch_size)
+                        running_val_correct_preds += batch_correct_preds
+                        running_val_correct_classwise_preds = add_lists_elementwise(running_val_correct_classwise_preds, batch_classwise_correct_preds)
+
+                        writer_epoch.add_scalar(tag = 'VGG16/ValidationIterationAverageLoss'.format((current_epoch + 1)), scalar_value = current_average_val_loss, global_step = current_val_iter)
+                        writer_epoch.add_scalar(tag = 'VGG16/ValidationIterationAccuracy'.format(current_epoch + 1), scalar_value = batch_accuracy, global_step = current_val_iter)
+
                     last_epoch_average_val_loss = current_average_val_loss
 
-                    writer_avg_valid_loss.add_scalar(tag = 'VGG16/Overfitting', scalar_value = last_epoch_average_val_loss, global_step = (current_epoch + 1))
+                    last_epoch_val_accuracy, last_epoch_val_classwise_accuracy = calculate_epoch_accuracy(
+                        running_val_correct_preds, running_val_correct_classwise_preds, num_val_total_images, num_val_category_images)
+
+                    writer_avg_valid_loss.add_scalar(tag = 'VGG16/OverfittingLoss', scalar_value = last_epoch_average_val_loss, global_step = (current_epoch + 1))
+                    writer_val_accuracy.add_scalar(tag = 'VGG16/OverfittingAccuracy', scalar_value = last_epoch_val_accuracy, global_step = (current_epoch + 1))
+
+                    writer_val_classwise_accuracy.add_scalars(main_tag = 'VGG16/ValidationCategoryAccuracy/', 
+                        tag_scalar_dict =  dict(zip(cat_list, last_epoch_val_classwise_accuracy )),
+                        global_step = (current_epoch + 1))
 
                     val_time_elapsed = time.time() - val_epoch_since
 
         # Saving model parameters if average_val_loss or mAP is improved
-        if(last_epoch_average_val_loss <= best_epoch_average_val_loss):
-            is_saved = True
+        if(last_epoch_val_accuracy >= best_epoch_val_accuracy):
+            is_saved                            = True
             
-            best_epoch_average_val_loss   = last_epoch_average_val_loss
-            best_epoch_average_train_loss = last_epoch_average_train_loss
+            best_epoch_val_accuracy             = last_epoch_val_accuracy
+            best_epoch_train_accuracy           = last_epoch_train_accuracy
 
-            PATH = 'ModelParams/VGG16/vgg16_pretrained-epoch{}.pth'.format(current_epoch + 1)                        
+            best_epoch_val_classwise_accuracy   = last_epoch_val_classwise_accuracy
+            best_epoch_train_classwise_accuracy = last_epoch_train_classwise_accuracy
+
+            best_epoch_average_val_loss         = last_epoch_average_val_loss
+            best_epoch_average_train_loss       = last_epoch_average_train_loss
+
+            PATH = 'ModelParams/vgg16/vgg16_pretrained-epoch{}.pth'.format(current_epoch + 1)                        
             torch.save({
                     'epoch': current_epoch,
                     'train_iter': current_train_iter,
@@ -187,15 +259,27 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                     'best_train_loss': best_epoch_average_train_loss,
                     'best_val_loss': best_epoch_average_val_loss,
                     'last_train_loss': last_epoch_average_train_loss,
-                    'last_val_loss': last_epoch_average_val_loss
+                    'last_val_loss': last_epoch_average_val_loss,
+                    'best_train_accuracy': best_epoch_train_accuracy,
+                    'best_val_accuracy': best_epoch_val_accuracy,
+                    'last_train_accuracy': last_epoch_train_accuracy,
+                    'last_val_accuracy': last_epoch_val_accuracy,
+                    'best_train_classwise_accuracy': best_epoch_train_classwise_accuracy,
+                    'best_val_classwise_accuracy': best_epoch_val_classwise_accuracy,
+                    'last_train_classwise_accuracy': last_epoch_train_classwise_accuracy,
+                    'last_val_classwise_accuracy': last_epoch_val_classwise_accuracy
                     }, PATH)
-            
+                
             writer_text.add_text(tag = 'VGG16/SavingLogs',                                                                     \
                         text_string = (   '!!! IMPROVEMENT !!! MODEL PARAMETERS HAVE BEEN SAVED !!!  \n'                       \
                                         + '[BEST/LAST] AVERAGE TRAINING LOSS: [{:5f} / {:5f}]  \n'.format(
                                                 best_epoch_average_train_loss, last_epoch_average_train_loss)                  \
                                         + '[BEST/LAST] AVERAGE VALIDATION LOSS: [{:5f} / {:5f}]  \n'.format(
-                                                best_epoch_average_val_loss, last_epoch_average_val_loss)),                    \
+                                                best_epoch_average_val_loss, last_epoch_average_val_loss)                      \
+                                        + '[BEST/LAST] TRAINING ACCURACY: [{:5f} / {:5f}]  \n'.format(
+                                                best_epoch_train_accuracy, last_epoch_train_accuracy)                          \
+                                        + '[BEST/LAST] VALIDATION ACCURACY: [{:5f} / {:5f}]  \n'.format(
+                                                best_epoch_val_accuracy, last_epoch_val_accuracy)),                            \
                         global_step = (current_epoch + 1), walltime = None)
 
         else:
@@ -204,17 +288,25 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                                         + '[BEST/LAST] AVERAGE TRAINING LOSS: [{:5f} / {:5f}]  \n'.format(
                                                 best_epoch_average_train_loss, last_epoch_average_train_loss)                  \
                                         + '[BEST/LAST] AVERAGE VALIDATION LOSS: [{:5f} / {:5f}]  \n'.format(
-                                                best_epoch_average_val_loss, last_epoch_average_val_loss)),                    \
+                                                best_epoch_average_val_loss, last_epoch_average_val_loss)                      \
+                                        + '[BEST/LAST] TRAINING ACCURACY: [{:5f} / {:5f}]  \n'.format(
+                                                best_epoch_train_accuracy, last_epoch_train_accuracy)                          \
+                                        + '[BEST/LAST] VALIDATION ACCURACY: [{:5f} / {:5f}]  \n'.format(
+                                                best_epoch_val_accuracy, last_epoch_val_accuracy)),                            \
                         global_step = (current_epoch + 1), walltime = None)
         
-        writer_hparams.add_hparams(hparam_dict = {'EPOCH': str(current_epoch + 1),
-                                                  'BATCH SIZE': str(batch_size),
-                                                  'OPTIMIZER': 'ADAM (AMSGRAD)',
-                                                  'LEARNING RATE': str(base_lr_rate),
-                                                  'WEIGHT DECAY': str(weight_decay),
-                                                  'TRAIN LOSS': '{:5f}'.format(last_epoch_average_train_loss),
-                                                  'VAL LOSS': '{:5f}'.format(last_epoch_average_val_loss),
-                                                  'SAVED': str(is_saved)},
+        hparams_dict_1 = {  'EPOCH': str(current_epoch + 1),
+                            'SAVED': str(is_saved),
+                            'BATCH SIZE': str(batch_size),
+                            'OPTIMIZER': 'ADAM (AMSGRAD)',
+                            'LEARNING RATE': str(base_lr_rate),
+                            'WEIGHT DECAY': str(weight_decay),
+                            'TRAIN LOSS': '{:5f}'.format(last_epoch_average_train_loss),
+                            'VAL LOSS': '{:5f}'.format(last_epoch_average_val_loss)}
+
+        hparams_dict_2 = dict(zip(cat_list, last_epoch_val_classwise_accuracy ))
+
+        writer_hparams.add_hparams( hparam_dict = {**hparams_dict_1, **hparams_dict_2},
                                     metric_dict = {'VGG16/W_LEARNING_RATE': base_lr_rate})
         
         epoch_time_elapsed = time.time() - epoch_since
@@ -225,6 +317,10 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                                                 best_epoch_average_train_loss, last_epoch_average_train_loss)                  \
                                         + '[BEST/LAST] AVERAGE VALIDATION LOSS: [{:5f} / {:5f}]  \n'.format(
                                                 best_epoch_average_val_loss, last_epoch_average_val_loss)                      \
+                                        + '[BEST/LAST] TRAINING ACCURACY: [{:5f} / {:5f}]  \n'.format(
+                                                best_epoch_train_accuracy, last_epoch_train_accuracy)                          \
+                                        + '[BEST/LAST] VALIDATION ACCURACY: [{:5f} / {:5f}]  \n'.format(
+                                                best_epoch_val_accuracy, last_epoch_val_accuracy)                              \
                                         + 'EPOCH TIME: {}:{}  \n'.format(
                                                 int(epoch_time_elapsed // 60 // 60), int(epoch_time_elapsed // 60 % 60))       \
                                         + 'TRAINING TIME: {}:{}  \n'.format(
