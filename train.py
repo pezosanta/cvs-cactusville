@@ -44,14 +44,14 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
     last_epoch_train_classwise_accuracy     = []
     last_epoch_val_classwise_accuracy       = []
 
-    writer_text                             = SummaryWriter('Tensorboard/vgg16/vgg16_training_text/')
-    writer_avg_train_loss                   = SummaryWriter('Tensorboard/vgg16/vgg16_training_avg_train_loss_per_epoch/')
-    writer_train_accuracy                   = SummaryWriter('Tensorboard/vgg16/vgg16_training_train_accuracy_per_epoch/')
-    writer_train_classwise_accuracy         = SummaryWriter('Tensorboard/vgg16/vgg16_training_train_classwise_accuracy_per_epoch/')
-    writer_avg_valid_loss                   = SummaryWriter('Tensorboard/vgg16/vgg16_training_avg_valid_loss_per_epoch/')
-    writer_val_accuracy                     = SummaryWriter('Tensorboard/vgg16/vgg16_training_valid_accuracy_per_epoch/')
-    writer_val_classwise_accuracy           = SummaryWriter('Tensorboard/vgg16/vgg16_training_valid_classwise_accuracy_per_epoch/')
-    writer_hparams                          = SummaryWriter('Tensorboard/vgg16/vgg16_training_hparams/')
+    writer_text                             = SummaryWriter('../../logs/cvs-cactusville/Tensorboard/vgg16/vgg16_training_text/')
+    writer_avg_train_loss                   = SummaryWriter('../../logs/cvs-cactusville/Tensorboard/vgg16/vgg16_training_avg_train_loss_per_epoch/')
+    writer_train_accuracy                   = SummaryWriter('../../logs/cvs-cactusville/Tensorboard/vgg16/vgg16_training_train_accuracy_per_epoch/')
+    writer_train_classwise_accuracy         = SummaryWriter('../../logs/cvs-cactusville/Tensorboard/vgg16/vgg16_training_train_classwise_accuracy_per_epoch/')
+    writer_avg_valid_loss                   = SummaryWriter('../../logs/cvs-cactusville/Tensorboard/vgg16/vgg16_training_avg_valid_loss_per_epoch/')
+    writer_val_accuracy                     = SummaryWriter('../../logs/cvs-cactusville/Tensorboard/vgg16/vgg16_training_valid_accuracy_per_epoch/')
+    writer_val_classwise_accuracy           = SummaryWriter('../../logs/cvs-cactusville/Tensorboard/vgg16/vgg16_training_valid_classwise_accuracy_per_epoch/')
+    writer_hparams                          = SummaryWriter('../../logs/cvs-cactusville/Tensorboard/vgg16/vgg16_training_hparams/')
 
     train_dataset                           = TSDataset(mode = 'Train')
     train_loader                            = DataLoader(train_dataset, batch_size = batch_size, shuffle = True)
@@ -63,10 +63,10 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
     optimizer_state_dict                    = None
 
     if load_pretrained_weights == True:
-        checkpoint_path                     = 'ModelParams/vgg16/vgg16_bn-6c64b313.pth'
+        checkpoint_path                     = '../../logs/cvs-cactusville/ModelParams/vgg16/vgg16_bn-6c64b313.pth'
         model_state_dict                    = loadModelParams(checkpoint_path)
     else:
-        checkpoint_path                     = 'ModelParams/vgg16/'
+        checkpoint_path                     = '../../logs/cvs-cactusville/ModelParams/vgg16/'
         checkpoint                          = torch.load(checkpoint_path)
 
         model_state_dict                    = checkpoint['state_dict']
@@ -124,7 +124,7 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                
         epoch_since                             = time.time()
 
-        writer_epoch                            = SummaryWriter('Tensorboard/vgg16/vgg16_training_avg_loss_per_iteration_epoch_{}/'.format(current_epoch + 1))
+        writer_epoch                            = SummaryWriter('../../logs/cvs-cactusville/Tensorboard/vgg16/vgg16_training_avg_loss_per_iteration_epoch_{}/'.format(current_epoch + 1))
 
         current_train_iter                      = 0
         current_val_iter                        = 0
@@ -247,7 +247,7 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
             best_epoch_average_val_loss         = last_epoch_average_val_loss
             best_epoch_average_train_loss       = last_epoch_average_train_loss
 
-            PATH = 'ModelParams/vgg16/vgg16_pretrained-epoch{}.pth'.format(current_epoch + 1)                        
+            PATH = '../../logs/cvs-cactusville/ModelParams/vgg16/vgg16_pretrained-epoch{}.pth'.format(current_epoch + 1)                        
             torch.save({
                     'epoch': current_epoch,
                     'train_iter': current_train_iter,
