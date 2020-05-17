@@ -21,7 +21,7 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
 
     cat_list                                = [category.upper() for category in cat_list_lowercase]
 
-    base_lr_rate                            = 0.00025
+    base_lr_rate                            = 0.000025
     weight_decay                            = 0.000016
 
     starting_epoch                          = 0
@@ -66,10 +66,10 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
         checkpoint_path                     = '../../logs/cvs-cactusville/ModelParams/vgg16/vgg16_bn-6c64b313.pth'
         model_state_dict                    = loadModelParams(checkpoint_path)
     else:
-        checkpoint_path                     = '../../logs/cvs-cactusville/ModelParams/vgg16/'
+        checkpoint_path                     = '../../logs/cvs-cactusville/ModelParams/vgg16/vgg16_pretrained-epoch1.pth'
         checkpoint                          = torch.load(checkpoint_path)
 
-        model_state_dict                    = checkpoint['state_dict']
+        model_state_dict                    = checkpoint['model_state_dict']
         optimizer_state_dict                = checkpoint['optimizer_state_dict']
         starting_epoch                      = checkpoint['epoch'] + 1                   # Wherever we need to start the training from (based on Tensorboard!)
         starting_train_iter                 = 0#checkpoint['train_iter'] + 1
@@ -168,7 +168,7 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                     running_train_loss += loss.item()
                     current_average_train_loss = running_train_loss / current_train_iter
 
-                    batch_accuracy, batch_correct_preds, batch_classwise_correct_preds = calculate_batch_accuracy(outs, annotations, batch_size)
+                    batch_accuracy, batch_correct_preds, batch_classwise_correct_preds = calculate_batch_accuracy(outs, annotations, outs.shape[0])
                     running_train_correct_preds += batch_correct_preds
                     running_train_correct_classwise_preds = add_lists_elementwise(running_train_correct_classwise_preds, batch_classwise_correct_preds)
 
@@ -213,7 +213,7 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                         running_val_loss += val_loss.item()
                         current_average_val_loss = running_val_loss / current_val_iter
 
-                        batch_accuracy, batch_correct_preds, batch_classwise_correct_preds = calculate_batch_accuracy(outs, annotations, batch_size)
+                        batch_accuracy, batch_correct_preds, batch_classwise_correct_preds = calculate_batch_accuracy(outs, annotations, outs.shape[0])
                         running_val_correct_preds += batch_correct_preds
                         running_val_correct_classwise_preds = add_lists_elementwise(running_val_correct_classwise_preds, batch_classwise_correct_preds)
 
@@ -305,10 +305,11 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                             'VAL LOSS': '{:5f}'.format(last_epoch_average_val_loss)}
 
         hparams_dict_2 = dict(zip(cat_list, last_epoch_val_classwise_accuracy ))
-
+        '''
+        # There is not any add_hparams function in SummaryWriter in torch==1.1.0 (added in torch==1.3.0)
         writer_hparams.add_hparams( hparam_dict = {**hparams_dict_1, **hparams_dict_2},
                                     metric_dict = {'VGG16/W_LEARNING_RATE': base_lr_rate})
-        
+        '''
         epoch_time_elapsed = time.time() - epoch_since
 
         # Epoch ending logs
@@ -330,4 +331,4 @@ def train(batch_size = 128, epochs = 150, load_pretrained_weights = True):
                         global_step = (current_epoch + 1), walltime = None)
 
 if __name__ == "__main__":
-    train(batch_size = 64, epochs = 150, load_pretrained_weights = True)
+    train(batch_size = 64, epochs = 150, load_pretrained_weights = False)
