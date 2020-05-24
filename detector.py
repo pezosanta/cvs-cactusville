@@ -34,6 +34,27 @@ def slidingWindow(img_shape, minSize=32):  # img_shape = (height, width, channel
             searchWinSize = (searchWinSize * 1.3).astype(np.uint32)
 
 
+# Classifier code
+def classifyBoxes(scaler, classifier, img, bboxes):
+    objects = []
+    for a in bboxes:
+        sub_img = img[a[1]:a[3], a[0]:a[2]]
+        sub_img = cv2.resize(sub_img, winSize, cv2.INTER_LANCZOS4)
+        des = hog.compute(sub_img)
+        des = np.squeeze(des)
+        des = scaler.transform(np.expand_dims(des, axis=0))
+        des = np.squeeze(des)
+        classInd = classifier.predict(np.expand_dims(des, axis=0)).item()
+
+        u = (a[0] + a[2]) // 2
+        v = (a[1] + a[3]) // 2
+        w = a[2] - a[0]
+        h = a[3] - a[1]
+        obj = ImgObject([u, v, w, h, classInd, 0, 0, 0, 0])
+        objects.append(obj)
+
+    return objects
+
 # Object detector code
 def detectAndClassify(img, scaler, detector, classifier):
     bboxes = []
@@ -65,22 +86,7 @@ def detectAndClassify(img, scaler, detector, classifier):
     bboxes = non_max_suppression_fast(bboxes, 0)
 
     # Classify remaining boxes
-    objects = []
-    for a in bboxes:
-        sub_img = img[a[1]:a[3], a[0]:a[2]]
-        sub_img = cv2.resize(sub_img, winSize, cv2.INTER_LANCZOS4)
-        des = hog.compute(sub_img)
-        des = np.squeeze(des)
-        des = scaler.transform(np.expand_dims(des, axis=0))
-        des = np.squeeze(des)
-        classInd = classifier.predict(np.expand_dims(des, axis=0)).item()
-
-        u = (a[0] + a[2]) // 2
-        v = (a[1] + a[3]) // 2
-        w = a[2] - a[0]
-        h = a[3] - a[1]
-        obj = ImgObject([u, v, w, h, classInd, 0, 0, 0, 0])
-        objects.append(obj)
+    objects = classifyBoxes(scaler, classifier, img, bboxes)
 
     return objects
 
