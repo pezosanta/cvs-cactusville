@@ -18,6 +18,16 @@ class ImgObject:
     def getClassName(self):
         return self.classNames[self.classInd]
 
+    def getSubImgCoords(self, img, scale=1):
+        max_y, max_x = img.shape[:2]
+
+        x1 = max(self.u - int(self.w * scale / 2), 0)
+        x2 = min(x1 + int(self.w * scale), max_x)
+        y1 = max(self.v - int(self.h * scale / 2), 0)
+        y2 = min(y1 + int(self.h * scale), max_y)
+
+        return x1, y1, x2, y2
+
     def makeList(self):
         obj = [0 for _ in range(9)]
         obj[0:2] = self.u, self.v
