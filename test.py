@@ -1,9 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
-import numpy as np
 from dataset import TSDataset
 from vgg import vgg16_bn, loadModelParams
-from utils import cat_list as cat_list_lowercase
 
 def test():
     test_dataset                        = TSDataset(mode = 'Test')
@@ -20,8 +18,8 @@ def test():
     model.to(device = 'cuda:0')
     model.eval()
 
-    current_test_iter = 0
-    count = 0
+    current_test_iter                   = 0
+    count                               = 0
 
     with torch.no_grad():
         for test_data in test_loader:
