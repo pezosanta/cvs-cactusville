@@ -204,7 +204,7 @@ class TSDataset(Dataset):
 
     def __getitem__(self, index):
         FlatPathArray, FlatAnnotationArray          = shuffleFlatLists(self.FlatPathList, self.FlatAnnotationList)
-
+        
         numpyImage          = cv2.imread(FlatPathArray[index])
         numpyImage          = cv2.cvtColor(numpyImage, cv2.COLOR_BGR2RGB)
 
