@@ -110,7 +110,51 @@ def non_max_suppression_fast(boxes, overlapThresh):
     
     return bboxes
 
-def predictBlueBoundingBox(image, blueLowerThres, blueUpperThres, cannyLowerThres, cannyUpperThres):
+def ignoreFarBBoxes(bboxes, goodBboxes):
+    bboxesCopy = bboxes.copy()
+    goodBboxesCopy = goodBboxes.copy()
+
+    if len(bboxesCopy) != 0 and len(goodBboxesCopy) != 0:
+        boxes = np.array(bboxesCopy)
+       
+        x1 = boxes[:,0]
+        y1 = boxes[:,1]
+        #x2 = boxes[:,2]
+        #y2 = boxes[:,3]
+        
+        goodboxes = np.array(goodBboxesCopy)
+        goodx1 = goodboxes[:,0]
+        goody1 = goodboxes[:,1]
+        #goodx2 = goodboxes[:,2]
+        #goody2 = goodboxes[:,3]
+
+        remainingIdxs = []
+        for i in range(len(goodx1)):
+            currentgoodx1 = goodx1[i].item()
+            currentgoody1 = goody1[i].item()
+            for j in range(len(x1)):
+                currentx1 = x1[j].item()
+                currenty1 = y1[j].item()
+                if (abs(currentgoodx1 - currentx1) < 75) and (abs(currentgoody1 - currenty1) < 45):
+                    remainingIdxs.append(j)
+        
+        if len(remainingIdxs) > 0:
+            remainingIdxs = np.array(remainingIdxs)
+            unique, counts = np.unique(remainingIdxs, return_counts = True)
+            
+            remainingIdxs = np.array([False]*len(x1))       
+            remainingIdxs[unique] = True       
+
+            remainingBoxes = boxes[remainingIdxs,:]
+            remainingBoxes = remainingBoxes.tolist()
+        else:
+            remainingBoxes = []
+        
+        return remainingBoxes
+    else:
+        return bboxesCopy
+
+def predictBlueTSBoundingBox(image, blueLowerThres, blueUpperThres, cannyLowerThres, cannyUpperThres):
     img = np.copy(image)
     imgFinal = np.copy(image)
     #imgDilate = np.copy(image)
@@ -184,7 +228,7 @@ def predictBlueBoundingBox(image, blueLowerThres, blueUpperThres, cannyLowerThre
 
     return possible_table_bboxes
 
-def predictRedBoundingBox(image, blueBB, red_lower1, red_upper1, red_lower2, red_upper2, cannyLowerThres, cannyUpperThres):
+def predictRedTSBoundingBox(image, blueBB, red_lower1, red_upper1, red_lower2, red_upper2, cannyLowerThres, cannyUpperThres):
     img = np.copy(image)
     imgDilate = np.copy(image)
     
@@ -233,7 +277,7 @@ def predictRedBoundingBox(image, blueBB, red_lower1, red_upper1, red_lower2, red
         if (rect[2] * rect[3] > 600) and (rect[2] * rect[3] < 2050):
             x,y,w,h = rect
             bboxesErodeDilate.append([x, y, x+w, y+h])
-            cv2.rectangle(img,(x,y),(x+w,y+h),(0,0,255),2)
+            #cv2.rectangle(img,(x,y),(x+w,y+h),(0,0,255),2)
     
     #possible_table_bboxes = blue_nms(bboxes, 0.2)
     #possible_table_bboxes = non_max_suppression_fast(possible_table_bboxes, 0.3)
@@ -244,68 +288,126 @@ def predictRedBoundingBox(image, blueBB, red_lower1, red_upper1, red_lower2, red
         if (rect[2] * rect[3] > 600) and (rect[2] * rect[3] < 2050):
             x,y,w,h = rect
             bboxesDilate.append([x, y, x+w, y+h])
-            cv2.rectangle(img,(x,y),(x+w,y+h),(0,0,255),2)
-
+            #cv2.rectangle(img,(x,y),(x+w,y+h),(0,0,255),2)
 
     bboxes = bboxesErodeDilate + bboxesDilate
     bboxes = non_max_suppression_fast(bboxes, 0.2)
 
-    bboxesCopy = bboxes.copy()
-
-    #bboxes = bboxes + blueBB
-    #bboxes = non_max_suppression_fast(bboxes, 0.3)
-
-    if len(bboxesCopy) != 0 and len(blueBB) != 0:
-        redboxes = np.array(bboxesCopy)
-       
-        redx1 = redboxes[:,0]
-        redy1 = redboxes[:,1]
-        #redx2 = redboxes[:,2]
-        #redy2 = redboxes[:,3]
-
-        
-        blueboxes = np.array(blueBB)
-        bluex1 = blueboxes[:,0]
-        bluey1 = blueboxes[:,1]
-        #bluex2 = blueboxes[:,2]
-        #bluey2 = blueboxes[:,3]
-
-        remainingIdxs = []
-        for i in range(len(bluex1)):
-            currentbluex1 = bluex1[i].item()
-            currentbluey1 = bluey1[i].item()
-            for j in range(len(redx1)):
-                currentredx1 = redx1[j].item()
-                currentredy1 = redy1[j].item()
-                if (abs(currentbluex1 - currentredx1) < 75) and (abs(currentbluey1 - currentredy1) < 45):
-                    remainingIdxs.append(j)
-        
-        if len(remainingIdxs) > 0:
-            remainingIdxs = np.array(remainingIdxs)
-            unique, counts = np.unique(remainingIdxs, return_counts=True)
-            print(unique)
-            remainingIdxs = np.array([False]*len(redx1))       
-            remainingIdxs[unique] = True       
-
-            remainingRedBoxes = redboxes[remainingIdxs,:]
-            remainingRedBoxes = remainingRedBoxes.tolist()
-        else:
-            remainingRedBoxes = []
-        
+    remainingRedBoxes = ignoreFarBBoxes(bboxes, blueBB)
+    
     bboxes = remainingRedBoxes + blueBB
     bboxes = non_max_suppression_fast(bboxes, 0.3)
-
+    '''
     for box in bboxes:
         x1, y1, x2, y2 = box[0], box[1], box[2], box[3]        
         cv2.rectangle(imgFinal, (x1,y1), (x2,y2), (0,0,255), 2)
-    
+
     cv2.imshow('ORIGINAL', image)
     cv2.imshow('MASK', mask)
     cv2.imshow('MASK BBOX', img)
     cv2.imshow('FINAL', imgFinal)
-    #cv2.waitKey(0)
+    cv2.waitKey(0)
+    '''
+    return bboxes
 
-    return imgFinal, bboxes
+def predictYellowTSBoundingBox(image, blueBB, redBB, yellow_lower, yellow_upper, cannyLowerThres, cannyUpperThres):
+    img = np.copy(image)
+
+    yellow_lower = np.array([20, 100, 100], dtype = np.uint8)
+    yellow_upper = np.array([30, 255, 255], dtype = np.uint8)
+
+    imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    mask = cv2.inRange(imgHSV, yellow_lower, yellow_upper)
+    mask = np.clip(mask, 0, 255)
+    mask = np.uint8(mask)
+
+    mask = cv2.erode(mask, np.ones((3,3)), iterations = 1)
+    mask = cv2.dilate(mask, np.ones((5,5)), iterations = 5)
+
+    maskCopy = np.copy(mask)
+
+    edges = cv2.Canny(maskCopy,cannyLowerThres,cannyUpperThres)
+    edgesContours, edgesHierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    #cv2.drawContours(img, edgesContours, -1, (0, 255, 0), 3)
+
+    bboxes = []
+    for c in edgesContours:
+        rect = cv2.boundingRect(c)
+        if (rect[2] * rect[3] > 700) and (rect[2] * rect[3] < 2050):
+            x,y,w,h = rect
+            bboxes.append([x, y, x+w, y+h])
+            #cv2.rectangle(img,(x,y),(x+w,y+h),(0,0,255),2)
+
+    remainingYellowBoxes = ignoreFarBBoxes(bboxes, blueBB)
+    bboxes = remainingYellowBoxes + redBB
+
+    bboxes = non_max_suppression_fast(bboxes, 0.3)
+    '''
+    for box in bboxes:
+        x1, y1, x2, y2 = box[0], box[1], box[2], box[3]        
+        cv2.rectangle(img, (x1,y1), (x2,y2), (0,0,255), 2)
+    
+    
+    cv2.imshow('ORIGINAL', image)
+    cv2.imshow('YELLOW MASK', mask)
+    cv2.imshow('YELLOW BBOX', img)
+    cv2.waitKey(0)
+    '''
+    return bboxes
+
+def predictLargeBoundingBox(image, blueBB, yellowBB, yellow_lower, yellow_upper, cannyLowerThres, cannyUpperThres):
+    img = np.copy(image)
+    imgDilate = np.copy(image)
+    imgFinal = np.copy(image)
+
+    brown_lower = np.array([10,100,20], dtype=np.uint8)
+    brown_upper = np.array([20,255,200], dtype=np.uint8)    
+    yellow_lower = np.array([20, 100, 100], dtype = np.uint8)
+    yellow_upper = np.array([30, 255, 255], dtype = np.uint8)
+    red_lower1 = np.array([0,70,50], dtype=np.uint8)
+    red_upper1 = np.array([10, 255, 255], dtype=np.uint8)
+    red_lower2 = np.array([170,70,50], dtype=np.uint8)
+    red_upper2 = np.array([180, 255, 200], dtype=np.uint8)
+    black_lower = np.array([0, 0, 0], dtype = np.uint8)
+    black_upper = np.array([180, 255, 40], dtype = np.uint8)
+    white_lower = np.array([0, 0, 230], dtype = np.uint8)
+    white_upper = np.array([180, 255, 255], dtype = np.uint8)
+    
+    imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    redMask1 = cv2.inRange(imgHSV, red_lower1, red_upper1)
+    redMask2 = cv2.inRange(imgHSV, red_lower2, red_upper2)
+
+    brownMask = cv2.inRange(imgHSV, brown_lower, brown_upper)
+
+    blackMask = cv2.inRange(imgHSV, black_lower, black_upper)
+
+    whiteMask = cv2.inRange(imgHSV, white_lower, white_upper)
+    whiteMask = cv2.erode(whiteMask, np.ones((3,3)), iterations = 1)
+
+    yellowMask = cv2.inRange(imgHSV, yellow_lower, yellow_upper)
+
+    
+    mask = redMask1 + redMask2 + whiteMask + brownMask + blackMask + whiteMask
+    mask = np.clip(mask, 0, 255)
+    mask = np.uint8(mask)
+
+    origmask = np.copy(mask)
+
+    #for box in yellowBB:
+    #    mask[box[1]:box[3], box[0]:box[2]] = 0
+
+    mask = cv2.erode(mask, np.ones((4,4)), iterations = 1)
+    #mask = cv2.erode(mask, np.ones((3,3)), iterations = 1)
+    #mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((2,2)), iterations = 1)
+    #mask = cv2.morphologyEx(mask, cv2.MORPH_GRADIENT, np.ones((2,2)), iterations = 2)
+    #mask = cv2.morphologyEx(mask, cv2.MORPH_BLACKHAT, np.ones((2,2)), iterations = 1)
+    mask = cv2.dilate(mask, np.ones((3,3)), iterations = 2)
+    #mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((2,2)), iterations = 1)
+
+    
 
 def predictBrownBoundingBox(image, blueBB, brownLowerThres, brownUpperThres, cannyLowerThres, cannyUpperThres):
     img = np.copy(image)

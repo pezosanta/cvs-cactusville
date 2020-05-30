@@ -3,7 +3,7 @@ import numpy as np
 #from task1_utils import segmentBackground, predictBoundingBox
 from task1_utils import segmentBackground_v2 as segmentBackground
 #from task1_utils import predictBoundingBox, predictBlueBoundingBox
-from task1_utils_v2 import predictBlueBoundingBox, predictBrownBoundingBox, predictRedBoundingBox
+from task1_utils_v2 import predictBlueTSBoundingBox, predictBrownBoundingBox, predictRedTSBoundingBox, predictYellowTSBoundingBox
 import matplotlib.pyplot as plt
 
 def generateBboxes(image):
@@ -70,7 +70,7 @@ trainPath 		= rgbImagePath1 + rgbImagePath2 + rgbImagePath3	# 55 db || eltérő 
 valPath			= rgbImagePath4									# 15 db || eltérő fényviszonyos képek indexei: 12
 
 
-image = cv2.imread(trainPath[33])#25   #35-nél nem kell nms                       20!!!!
+image = cv2.imread(trainPath[0])#25   #35-nél nem kell nms                       20!!!!
 
 
 clasterNum      = 2
@@ -85,22 +85,24 @@ cannyLowerThres = 20
 cannyUpperThres = 300
 
 
-
 brown_lower = np.array([10,100,20], dtype=np.uint8)
 brown_upper = np.array([20,255,200], dtype=np.uint8)
 green_lower = np.array([40, 52, 72], dtype=np.uint8)
 green_upper = np.array([80, 255, 255], dtype=np.uint8)
-yellow_lower = np.array([10, 41, 133], dtype=np.uint8)  # [10, 41, 133]
-yellow_upper = np.array([50, 150, 200], dtype=np.uint8) # [50, 150, 200]
+yellow_lower = np.array([20, 100, 100], dtype = np.uint8)
+yellow_upper = np.array([30, 255, 255], dtype = np.uint8)
 red_lower1 = np.array([0,70,50], dtype=np.uint8)
 red_upper1 = np.array([10, 255, 255], dtype=np.uint8)
 red_lower2 = np.array([170,70,50], dtype=np.uint8)
-red_upper2 = np.array([180, 255, 255], dtype=np.uint8)
+red_upper2 = np.array([180, 255, 200], dtype=np.uint8)
 blue_lower = np.array([70,40,0],np.uint8) #100, 150
 blue_upper = np.array([140,255,255],np.uint8)
 
-#blueBB = predictBlueBoundingBox(image, blue_lower, blue_upper, cannyLowerThres, cannyUpperThres)
-#redBB = predictRedBoundingBox(image, blueBB, red_lower1, red_upper1, red_lower2, red_upper2, cannyLowerThres, cannyUpperThres)
+#blueBB = predictBlueTSBoundingBox(image, blue_lower, blue_upper, cannyLowerThres, cannyUpperThres)
+#redBB = predictRedTSBoundingBox(image, blueBB, red_lower1, red_upper1, red_lower2, red_upper2, cannyLowerThres, cannyUpperThres)
+#yellowBB = predictYellowTSBoundingBox(image, redBB, yellow_lower, yellow_upper, cannyLowerThres, cannyUpperThres)
+
+
 
 '''
 #combinedMask = generateBboxes(image)
@@ -182,7 +184,7 @@ hsv = cv2.merge([h,s,v])
 '''
 for i in range(len(trainPath)):
     image = cv2.imread(trainPath[i])
-    blueBB = predictBlueBoundingBox(image, blue_lower, blue_upper, cannyLowerThres, cannyUpperThres)
+    blueBB = predictBlueTSBoundingBox(image, blue_lower, blue_upper, cannyLowerThres, cannyUpperThres)
     for box in blueBB:
         x1, y1, x2, y2 = box[0], box[1], box[2], box[3]        
         cv2.rectangle(image, (x1,y1), (x2,y2), (0,0,255), 2)
@@ -195,13 +197,22 @@ for i in range(len(trainPath)):
     
     cv2.imwrite('../PredictionsRedTest/{}.jpg'.format(i), mask)
 '''
-
+'''
 for i in range(len(trainPath)):
     image = cv2.imread(trainPath[i])
     blueBB = predictBlueBoundingBox(image, blue_lower, blue_upper, cannyLowerThres, cannyUpperThres)
-    img, redBB = predictRedBoundingBox(image, blueBB, red_lower1, red_upper1, red_lower2, red_upper2, cannyLowerThres, cannyUpperThres)
+    img, redBB = predictRedTSBoundingBox(image, blueBB, red_lower1, red_upper1, red_lower2, red_upper2, cannyLowerThres, cannyUpperThres)
     
     cv2.imwrite('../PredictionsRedBlueTest/{}.jpg'.format(i), img)
+'''
+
+for i in range(len(trainPath)):
+    image = cv2.imread(trainPath[i])
+    blueBB = predictBlueTSBoundingBox(image, blue_lower, blue_upper, cannyLowerThres, cannyUpperThres)
+    redBB = predictRedTSBoundingBox(image, blueBB, red_lower1, red_upper1, red_lower2, red_upper2, cannyLowerThres, cannyUpperThres)
+    img, yellowBB = predictYellowTSBoundingBox(image, blueBB, redBB, yellow_lower, yellow_upper, cannyLowerThres, cannyUpperThres)
+    
+    cv2.imwrite('../PredictionsYellowTest/{}.jpg'.format(i), img)
 
 #cv2.imshow('COLOR BASED MASK', mask)
 #cv2.imshow('COLOR BASED INVERTED MASK', invMask*255)
