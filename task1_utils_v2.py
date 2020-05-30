@@ -1,6 +1,85 @@
 import cv2
 import numpy as np 
 
+def intersection_over_union(boxA, boxB):
+	
+	xA = max(boxA[0], boxB[0])
+	yA = max(boxA[1], boxB[1])
+	xB = min(boxA[2], boxB[2])
+	yB = min(boxA[3], boxB[3])
+	
+	interArea = max(0, xB - xA + 1) * max(0, yB - yA + 1)
+	
+	boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
+	boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
+	
+	iou = interArea / float(boxAArea + boxBArea - interArea)
+	
+	return iou
+
+def join_bboxes_based_on_iou(bboxes, overlapThres):
+    origBoxes = bboxes.copy()
+    boxes = bboxes.copy()
+
+    deletingIdxs = []
+    joinedBBoxes = []
+    remainingBBoxes = []
+    for i in range(len(boxes)-1):
+        boxA = boxes[i]
+        for j in range(i+1,len(boxes)):
+            boxB = boxes[j]
+            iou = intersection_over_union(boxA, boxB)
+            if iou > overlapThres:
+                x1 = min(boxA[0], boxB[0])
+                y1 = min(boxA[1], boxB[1])
+                x2 = max(boxA[2], boxB[2])
+                y2 = max(boxA[3], boxB[3])
+
+                joinedBBoxes.append([x1, y1, x2, y2])
+
+                deletingIdxs.append(i)
+                deletingIdxs.append(j)
+    
+    if len(deletingIdxs) > 0:
+        boxes = np.array(boxes)
+    
+        deletingIdxs = np.array(deletingIdxs)
+        unique, counts = np.unique(deletingIdxs, return_counts = True)
+        
+        deletingIdxs = np.array([True]*len(boxes))       
+        deletingIdxs[unique] = False       
+
+        remainingBBoxes = boxes[deletingIdxs,:]
+        remainingBBoxes = remainingBBoxes.tolist()
+    else:
+        remainingBBoxes = []
+    
+    if len(deletingIdxs) > 0:
+        return remainingBBoxes + joinedBBoxes
+    else:
+        return origBoxes
+
+def separateLargeAndRedBoxes(largeBoxes, redBoxes, overlapThres):
+    orig_largeBoxes = largeBoxes.copy()
+    orig_redBoxes = redBoxes.copy()
+
+    large_boxes = largeBoxes.copy()
+    red_boxes = redBoxes.copy()
+
+    updated_large_boxes
+    for i in range(len(red_boxes)):
+        current_red_box = red_boxes[i]
+        for j in range(len(large_boxes)):
+            current_large_box = large_boxes[j]
+            iou = intersection_over_union(current_large_box, current_red_box)
+            if iou > overlapThres:
+                x1 = min(current_large_box[0], current_red_box[0])
+                y1 = min(current_large_box[1], current_red_box[1])
+                x2 = min(current_large_box[2], current_red_box[2])
+                y2 = min(current_large_box[3], current_red_box[3])
+
+
+
 def blue_nms(boxes, overlapThresh):
 
     if len(boxes) == 0:
@@ -357,40 +436,99 @@ def predictYellowTSBoundingBox(image, blueBB, redBB, yellow_lower, yellow_upper,
     '''
     return bboxes
 
-def predictLargeBoundingBox(image, blueBB, yellowBB, yellow_lower, yellow_upper, cannyLowerThres, cannyUpperThres):
+def predictLargeRedBoundingBox(image, redMask, cannyLowerThres, cannyUpperThres):
     img = np.copy(image)
+    mask = np.copy(redMask)
+
+    mask = cv2.erode(mask, np.ones((3,3)), iterations = 2)
+    mask = cv2.dilate(mask, np.ones((5,5)), iterations = 4)
+
+    maskCopy = np.copy(mask)
+
+    maskCopy[0:int(maskCopy.shape[0] / 2), :] = 0
+
+    edges = cv2.Canny(maskCopy,cannyLowerThres,cannyUpperThres)
+    edgesContours, edgesHierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    #cv2.drawContours(img, edgesContours, -1, (0, 255, 0), 3)
+
+    bboxes = []
+    for c in edgesContours:
+        rect = cv2.boundingRect(c)
+        if rect[2] * rect[3] > 3850 and rect[2] * rect[3] < 28000:
+            x,y,w,h = rect
+            bboxes.append([x, y, x+w, y+h])
+            #cv2.rectangle(img,(x,y),(x+w,y+h),(0,0,255),2)
+    
+    bboxes = join_bboxes_based_on_iou(bboxes, 0)    
+    '''
+    for box in bboxes:
+        x1, y1, x2, y2 = box[0], box[1], box[2], box[3]        
+        cv2.rectangle(img, (x1,y1), (x2,y2), (0,0,255), 2)
+
+    cv2.imshow('ORIGINAL', image)
+    cv2.imshow('MASK BBOX', img)
+    cv2.waitKey(0)
+    '''
+    return bboxes
+
+def predictLargeBoundingBox(image, blueBB, redBB, yellowBB, yellow_lower, yellow_upper, cannyLowerThres, cannyUpperThres):
+    img = np.copy(image)
+    #img = np.copy(image[int(image.shape[0] / 3):, :, :])
     imgDilate = np.copy(image)
     imgFinal = np.copy(image)
 
     brown_lower = np.array([10,100,20], dtype=np.uint8)
-    brown_upper = np.array([20,255,200], dtype=np.uint8)    
+    brown_upper = np.array([20,255,220], dtype=np.uint8)    
     yellow_lower = np.array([20, 100, 100], dtype = np.uint8)
     yellow_upper = np.array([30, 255, 255], dtype = np.uint8)
     red_lower1 = np.array([0,70,50], dtype=np.uint8)
-    red_upper1 = np.array([10, 255, 255], dtype=np.uint8)
+    red_upper1 = np.array([8, 255, 255], dtype=np.uint8)
     red_lower2 = np.array([170,70,50], dtype=np.uint8)
     red_upper2 = np.array([180, 255, 200], dtype=np.uint8)
     black_lower = np.array([0, 0, 0], dtype = np.uint8)
     black_upper = np.array([180, 255, 40], dtype = np.uint8)
-    white_lower = np.array([0, 0, 230], dtype = np.uint8)
-    white_upper = np.array([180, 255, 255], dtype = np.uint8)
-    
-    imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    white_lower = np.array([0, 0, 195], dtype = np.uint8)#210
+    white_upper = np.array([180, 255, 255], dtype = np.uint8)#180
+    blue_lower = np.array([70,40,0],np.uint8) #100, 150
+    blue_upper = np.array([140,255,255],np.uint8)
 
+
+    imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    #imgHSVLow = cv2.cvtColor(imgLow, cv2.COLOR_BGR2HSV)
+    '''
+    import matplotlib.pyplot as plt
+    imgHSVCopy = np.copy(imgHSV)
+    hist = cv2.calcHist([imgHSVCopy], [0, 1], None, [180, 256], [0, 180, 0, 256])
+    #h,s,v = cv2.split(imgHSVCopy)
+    #h = cv2.equalizeHist(h)
+    #s = cv2.equalizeHist(s)
+    #v = cv2.equalizeHist(v)
+    plt.imshow(hist,interpolation = 'nearest')
+    plt.show()
+    '''
     redMask1 = cv2.inRange(imgHSV, red_lower1, red_upper1)
     redMask2 = cv2.inRange(imgHSV, red_lower2, red_upper2)
+    redMask = redMask1 + redMask2
+    redMask = np.clip(redMask, 0, 255)
+    redMask = np.uint8(redMask)
 
     brownMask = cv2.inRange(imgHSV, brown_lower, brown_upper)
 
     blackMask = cv2.inRange(imgHSV, black_lower, black_upper)
 
     whiteMask = cv2.inRange(imgHSV, white_lower, white_upper)
-    whiteMask = cv2.erode(whiteMask, np.ones((3,3)), iterations = 1)
+    whiteMask = cv2.erode(whiteMask, np.ones((2,2)), iterations = 1)
 
     yellowMask = cv2.inRange(imgHSV, yellow_lower, yellow_upper)
 
+    blueMask = cv2.inRange(imgHSV, blue_lower, blue_upper)
+    blueMask = np.uint8(blueMask)
+
+    red_bboxes = predictLargeRedBoundingBox(img, redMask, cannyLowerThres, cannyUpperThres)
+
     
-    mask = redMask1 + redMask2 + whiteMask + brownMask + blackMask + whiteMask
+    mask = brownMask# + redMask# + blackMask + whiteMask# + yellowMask# + blackMask# + whiteMask
     mask = np.clip(mask, 0, 255)
     mask = np.uint8(mask)
 
@@ -398,14 +536,117 @@ def predictLargeBoundingBox(image, blueBB, yellowBB, yellow_lower, yellow_upper,
 
     #for box in yellowBB:
     #    mask[box[1]:box[3], box[0]:box[2]] = 0
-
-    mask = cv2.erode(mask, np.ones((4,4)), iterations = 1)
+    '''
+    for box in yellowBB:
+        mask[box[1]:box[3], box[0]:box[2]] = 0
+    for box in redBB:
+        mask[box[1]:box[3], box[0]:box[2]] = 0
+    for box in blueBB:
+        mask[box[1]:box[3], box[0]:box[2]] = 0
+    '''
+    mask = cv2.erode(mask, np.ones((3,3)), iterations = 1)
     #mask = cv2.erode(mask, np.ones((3,3)), iterations = 1)
     #mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((2,2)), iterations = 1)
     #mask = cv2.morphologyEx(mask, cv2.MORPH_GRADIENT, np.ones((2,2)), iterations = 2)
     #mask = cv2.morphologyEx(mask, cv2.MORPH_BLACKHAT, np.ones((2,2)), iterations = 1)
-    mask = cv2.dilate(mask, np.ones((3,3)), iterations = 2)
+    
+    mask = mask# + whiteMask
+    mask = np.clip(mask, 0, 255)
+    mask = np.uint8(mask)
+
+    
+
+    mask = cv2.dilate(mask, np.ones((20,20)), iterations = 2)#9,9 2
     #mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((2,2)), iterations = 1)
+    '''
+    for box in yellowBB:
+        mask[box[1]:box[3], box[0]:box[2]] = 0
+    for box in redBB:
+        mask[box[1]:box[3], box[0]:box[2]] = 0
+    '''
+    
+    mask = mask - blueMask
+    mask = np.clip(mask, 0, 255)
+    mask = np.uint8(mask)
+
+    for box in yellowBB:
+        mask[box[1]:box[3], box[0]:box[2]] = 0
+    for box in redBB:
+        mask[box[1]:box[3], box[0]:box[2]] = 0
+    for box in blueBB:
+        mask[box[1]:box[3], box[0]:box[2]] = 0
+    
+    maskCopy = np.copy(mask)
+    #maskCopyDilate = np.copy(mask)
+
+    #maskCopy[0:int(maskCopy.shape[0] / 2), :] = 0
+
+    ##edges = cv2.Canny(maskCopy,cannyLowerThres,cannyUpperThres)
+    ##edgesContours, edgesHierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    #maskCopyDilate = cv2.morphologyEx(maskCopyDilate, cv2.MORPH_CLOSE, np.ones((3,3)), iterations = 1)
+    #maskCopyDilate = cv2.dilate(maskCopyDilate, np.ones((3,3)), iterations = 4)
+    #maskCopyDilate = cv2.morphologyEx(maskCopyDilate, cv2.MORPH_OPEN, np.ones((3,3)), iterations = 2)
+    #maskCopyDilate = cv2.morphologyEx(maskCopyDilate, cv2.MORPH_CLOSE, np.ones((3,3)), iterations = 3)
+
+
+    maskLineIdxs = (np.where(np.sum(np.clip(maskCopy[0:90, :], 0, 1), axis = 1) >= 300)) #350
+    maskLastLineIdx = (maskLineIdxs[0][-1] if maskLineIdxs[0].size > 0 else 0)
+    #maskLastLineIdx = (maskLastLineIdx if (maskLastLineIdx % 2) == 0 else maskLastLineIdx - 1)
+    maskCopy[0:maskLastLineIdx, :] = 0
+
+    edges = cv2.Canny(maskCopy,cannyLowerThres,cannyUpperThres)
+    edgesContours, edgesHierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    
+    #edgesDilate = cv2.Canny(maskCopyDilate,cannyLowerThres,cannyUpperThres)
+    #edgesDilateContours, edgesDilateHierarchy = cv2.findContours(edgesDilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    cv2.drawContours(img, edgesContours, -1, (0, 255, 0), 3)
+    #cv2.drawContours(imgDilate, edgesContours, -1, (0, 255, 0), 3)
+
+    bboxes = []
+    for c in edgesContours:
+        rect = cv2.boundingRect(c)
+        if rect[2] * rect[3] > 3500 and rect[2] * rect[3] < 150000 and rect[2] < 250:#3850
+            x,y,w,h = rect
+            bboxes.append([x, y, x+w, y+h])
+            #cv2.rectangle(img,(x,y),(x+w,y+h),(0,0,255),2)
+    
+    #bboxes = blue_nms(bboxes, 0.01)
+    #bboxes = non_max_suppression_fast(bboxes, 0.05)    
+    
+    extendedBoxes = bboxes + red_bboxes
+    
+    extendedBoxes = join_bboxes_based_on_iou(extendedBoxes, 0.17)
+    
+    extendedBoxes = join_bboxes_based_on_iou(extendedBoxes, 0.15)
+    extendedBoxes = join_bboxes_based_on_iou(extendedBoxes, 0.08)
+    extendedBoxes = join_bboxes_based_on_iou(extendedBoxes, 0.4)
+    #extendedBoxes = join_bboxes_based_on_iou(extendedBoxes, 0.05)
+    
+    '''
+    extendedBoxes = non_max_suppression_fast(extendedBoxes, 0.5)
+    extendedBoxes = join_bboxes_based_on_iou(extendedBoxes, 0.0)
+    extendedBoxes = join_bboxes_based_on_iou(extendedBoxes, 0.0)
+    '''
+    for box in extendedBoxes:
+        x1, y1, x2, y2 = box[0], box[1], box[2], box[3]        
+        cv2.rectangle(img, (x1,y1), (x2,y2), (0,0,255), 2)
+    '''
+    cv2.imshow('ORIGINAL', image)
+    cv2.imshow('ORIGINAL MASK', origmask)
+    cv2.imshow('TRANSFORMED MASK', maskCopy)
+    #cv2.imshow('BROWN MASK DILATE', maskCopyDilate)
+    cv2.imshow('MASK BBOX', img)
+    #cv2.imshow('MASK DILATE BBOX', imgDilate)
+    #cv2.imshow('FINAL', imgFinal)
+    cv2.imshow('CANNY', edges)
+    #cv2.imshow('CANNY DILATE', edgesDilate)
+    cv2.waitKey(0)
+    '''
+    return img#mask
+
+
 
     
 
