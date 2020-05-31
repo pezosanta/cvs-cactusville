@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from trainDetector import ImgObject, winSize, hog
+from detectorHOGSVM.trainDetector import ImgObject, winSize, hog
 
 
 def slidingWindow(img_shape, minSize=32):
