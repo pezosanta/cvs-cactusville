@@ -8,12 +8,12 @@ import numpy as np
 from detectorHOGSVM.definitions import hog, winSize, ImgObject, subclassNames
 from detectorHOGSVM.helpers import loadPipeline
 from task1_bbox_prediction import predict_bboxes
-from task3 import get3DPosition
 from trainClassifier import sorted_nicely
 
 ts_clf = loadPipeline(fp='ts_clf.gz')
 vc_clf = loadPipeline(fp='vc_clf.gz')
 large_clf = loadPipeline(fp='large_clf.gz')
+subcacti_clf = loadPipeline(fp='subcacti_clf.gz')
 
 
 # Classifier code
@@ -62,7 +62,9 @@ def classifyBoxes(img, tsBoxes, redBoxes, largeBoxes):
         des = hog.compute(sub_img)
         des = np.squeeze(des)
         pred = large_clf.predict(np.expand_dims(des, axis=0)).item()
-        if pred < 0:
+        if pred == 0:
+            continue
+        elif pred == -1:
             classInd = 1
 
         u = (a[0] + a[2]) // 2
@@ -71,6 +73,20 @@ def classifyBoxes(img, tsBoxes, redBoxes, largeBoxes):
         h = a[3] - a[1]
         obj = ImgObject([u, v, w, h, classInd, subClassInd, 0, 0, 0])
         objects.append(obj)
+
+    return objects
+
+
+def classifyCacti(img, objects):
+    for i, obj in enumerate(objects):
+        if obj.classInd == 2:
+            x1, y1, x2, y2 = obj.getSubImgCoords(img, scale=1)
+            sub_img = img[y1:y2, x1:x2]
+            sub_img = cv2.resize(sub_img, winSize, cv2.INTER_LANCZOS4)
+            des = hog.compute(sub_img)
+            des = np.squeeze(des)
+            pred = subcacti_clf.predict(np.expand_dims(des, axis=0)).item()
+            objects[i].subClassInd = int(pred)
 
     return objects
 
@@ -84,6 +100,7 @@ def detectAndClassify(img):
     objects = classifyBoxes(img, tsBoxes, redBoxes, largeBoxes)
 
     # TODO: find subclasses where possible
+    objects = classifyCacti(img, objects)
 
     return objects
 
@@ -144,17 +161,11 @@ def main():
             img = cv2.imread(image['rgb'])
             depth = cv2.imread(image['depth'], -1)
             img_orig = img.copy()
-            img = cv2.GaussianBlur(img, (5, 5), 0)
-            # img = cv2.cvtColor(img, cv2.COLOR_BGR2YCR_CB)
             objects = annotations[image['rgb']]['objects']
             objects = [ImgObject(obj) for obj in objects]
             total += len(objects)
 
-            # Task 1
             objects = detectAndClassify(img)
-
-            # Task 3
-            objects = [get3DPosition(depth, obj) for obj in objects]
 
             # Convert to lists
             objects = [obj.makeList() for obj in objects]
