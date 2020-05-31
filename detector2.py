@@ -8,6 +8,7 @@ import numpy as np
 from detectorHOGSVM.definitions import hog, winSize, ImgObject, subclassNames
 from detectorHOGSVM.helpers import loadPipeline
 from task1_bbox_prediction import predict_bboxes
+from task3 import get3DPosition
 from trainClassifier import sorted_nicely
 
 ts_clf = loadPipeline(fp='ts_clf.gz')
@@ -141,6 +142,7 @@ def main():
     for video in videos_test:
         for image in video:
             img = cv2.imread(image['rgb'])
+            depth = cv2.imread(image['depth'], -1)
             img_orig = img.copy()
             img = cv2.GaussianBlur(img, (5, 5), 0)
             # img = cv2.cvtColor(img, cv2.COLOR_BGR2YCR_CB)
@@ -148,7 +150,13 @@ def main():
             objects = [ImgObject(obj) for obj in objects]
             total += len(objects)
 
+            # Task 1
             objects = detectAndClassify(img)
+
+            # Task 3
+            objects = [get3DPosition(depth, obj) for obj in objects]
+
+            # Convert to lists
             objects = [obj.makeList() for obj in objects]
 
             img = img_orig.copy()
